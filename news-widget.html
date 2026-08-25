@@ -205,24 +205,34 @@
         async function fetchFromRSS() {
             // Fetch feeds with delays to avoid rate limiting
             let allArticles = [];
+            let successCount = 0;
+            let failCount = 0;
 
             for (let i = 0; i < CONFIG.rssFeeds.length; i++) {
                 const feed = CONFIG.rssFeeds[i];
                 try {
-                    const articles = await fetchSingleFeed(feed.url, feed.name);
+                    const articles = await Promise.race([
+                        fetchSingleFeed(feed.url, feed.name),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                    ]);
+
                     if (articles && articles.length > 0) {
-                        console.log(`Loaded ${articles.length} articles from ${feed.name}`);
+                        console.log(`✓ Loaded ${articles.length} articles from ${feed.name}`);
                         allArticles = allArticles.concat(articles);
+                        successCount++;
                     }
                 } catch (error) {
-                    console.warn(`Failed to load feed: ${feed.name}`, error.message);
+                    console.warn(`✗ Failed to load feed: ${feed.name}`, error.message);
+                    failCount++;
                 }
 
                 // Add small delay between requests to avoid rate limiting
                 if (i < CONFIG.rssFeeds.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
+
+            console.log(`Feed results: ${successCount} succeeded, ${failCount} failed`);
 
             console.log(`Total articles fetched: ${allArticles.length}`);
 
@@ -295,8 +305,8 @@
 
         async function fetchSingleFeed(feedUrl, sourceName) {
             try {
-                // Use AllOrigins as CORS proxy to fetch RSS feed directly
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`;
+                // Use corsproxy.io as CORS proxy to fetch RSS feed directly
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`;
 
                 const response = await fetch(proxyUrl);
                 if (!response.ok) {
@@ -448,22 +458,4 @@
                 if (interval >= 1) {
                     return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
                 }
-            }
-
-            return 'Just now';
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Load news on page load
-        loadNews();
-
-        // Auto-refresh every 15 minutes
-        setInterval(loadNews, 15 * 60 * 1000);
-    </script>
-</body>
-</html>
+           
