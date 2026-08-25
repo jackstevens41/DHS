@@ -203,23 +203,26 @@
         }
 
         async function fetchFromRSS() {
-            // Fetch all RSS feeds in parallel
-            const feedPromises = CONFIG.rssFeeds.map(feed =>
-                fetchSingleFeed(feed.url, feed.name)
-            );
-
-            const feedResults = await Promise.allSettled(feedPromises);
-
-            // Combine all articles from successful feeds
+            // Fetch feeds with delays to avoid rate limiting
             let allArticles = [];
-            feedResults.forEach((result, index) => {
-                if (result.status === 'fulfilled' && result.value) {
-                    console.log(`Loaded ${result.value.length} articles from ${CONFIG.rssFeeds[index].name}`);
-                    allArticles = allArticles.concat(result.value);
-                } else {
-                    console.warn(`Failed to load feed: ${CONFIG.rssFeeds[index].name}`, result.reason);
+
+            for (let i = 0; i < CONFIG.rssFeeds.length; i++) {
+                const feed = CONFIG.rssFeeds[i];
+                try {
+                    const articles = await fetchSingleFeed(feed.url, feed.name);
+                    if (articles && articles.length > 0) {
+                        console.log(`Loaded ${articles.length} articles from ${feed.name}`);
+                        allArticles = allArticles.concat(articles);
+                    }
+                } catch (error) {
+                    console.warn(`Failed to load feed: ${feed.name}`, error.message);
                 }
-            });
+
+                // Add small delay between requests to avoid rate limiting
+                if (i < CONFIG.rssFeeds.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+            }
 
             console.log(`Total articles fetched: ${allArticles.length}`);
 
@@ -292,7 +295,7 @@
 
         async function fetchSingleFeed(feedUrl, sourceName) {
             try {
-                const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=50&api_key=YOUR_API_KEY_IF_NEEDED`;
+                const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=30`;
 
                 const response = await fetch(rss2jsonUrl);
                 if (!response.ok) {
