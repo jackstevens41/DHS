@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHS & Agencies News Feed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: transparent;
+            padding: 20px;
+        }
+
+        .news-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .widget-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #0078d4;
+        }
+
+        .widget-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #323130;
+        }
+
+        .agency-tag {
+            display: inline-block;
+            background: #e1dfdd;
+            color: #323130;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 6px;
+            text-transform: uppercase;
+        }
+
+        .contract-badge {
+            display: inline-block;
+            background: #d13438;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #605e5c;
+        }
+
+        .error {
+            background: #fde7e9;
+            border-left: 4px solid #a80000;
+            padding: 15px;
+            margin: 20px 0;
+            color: #323130;
+        }
+
+        .news-item {
+            background: #ffffff;
+            border: 1px solid #edebe9;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: box-shadow 0.2s, transform 0.2s;
+            cursor: pointer;
+        }
+
+        .news-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .news-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0078d4;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .news-description {
+            font-size: 14px;
+            color: #605e5c;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .news-meta {
+            font-size: 12px;
+            color: #8a8886;
+            display: flex;
+            gap: 12px;
+        }
+
+        .news-source {
+            font-weight: 600;
+        }
+
+        .refresh-btn {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .refresh-btn:hover {
+            background: #106ebe;
+        }
+    </style>
+</head>
+<body>
+    <div class="news-container">
+        <div class="widget-header">
+            <h1 class="widget-title">DHS & Agencies News</h1>
+            <button class="refresh-btn" onclick="loadNews()">Refresh</button>
+        </div>
+        <div id="news-feed">
+            <div class="loading">Loading news...</div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            // RSS feeds focused on federal/government news
+            rssFeeds: [
+                { name: 'FedScoop', url: 'https://fedscoop.com/feed/' },
+                { name: 'Nextgov', url: 'https://www.nextgov.com/rss/' },
+                { name: 'GovExec', url: 'https://www.govexec.com/rss/channel/excellence/' },
+                { name: 'Federal News Network', url: 'https://federalnewsnetwork.com/feed/' },
+                { name: 'FCW', url: 'https://fcw.com/rss-feeds/all/' },
+                { name: 'Defense One', url: 'https://www.defenseone.com/rss/all/' },
+                { name: 'Reuters', url: 'https://www.reutersagency.com/feed/' },
+                { name: 'AP News', url: 'https://feeds.apnews.com/rss/apf-topnews' },
+                { name: 'Politico', url: 'https://www.politico.com/rss/politics08.xml' },
+                { name: 'CyberScoop', url: 'https://cyberscoop.com/feed/' },
+                { name: 'Defense News', url: 'https://www.defensenews.com/arc/outboundfeeds/rss/' }
+            ],
+
+            // DHS agencies and keywords
+            agencies: [
+                { name: 'DHS', keywords: ['Department of Homeland Security', 'DHS'] },
+                { name: 'CISA', keywords: ['CISA', 'Cybersecurity and Infrastructure Security Agency'] },
+                { name: 'TSA', keywords: ['TSA', 'Transportation Security Administration'] },
+                { name: 'FEMA', keywords: ['FEMA', 'Federal Emergency Management Agency'] },
+                { name: 'ICE', keywords: ['ICE immigration', 'Immigration and Customs Enforcement'] },
+                { name: 'CBP', keywords: ['CBP', 'Customs and Border Protection'] },
+                { name: 'USCG', keywords: ['Coast Guard', 'USCG', 'U.S. Coast Guard'] },
+                { name: 'USSS', keywords: ['Secret Service', 'USSS'] },
+                { name: 'USCIS', keywords: ['USCIS', 'U.S. Citizenship and Immigration Services', 'Citizenship and Immigration Services'] },
+                { name: 'FLETC', keywords: ['FLETC', 'Federal Law Enforcement Training Centers', 'Federal Law Enforcement Training Center'] },
+                { name: 'CWMD', keywords: ['CWMD', 'Countering Weapons of Mass Destruction'] }
+            ],
+
+            // High-priority keywords for contracting and spending
+            contractKeywords: ['contract', 'contracts', 'contracting', 'contractor', 'procurement', 'solicitation', 'RFP', 'RFI', 'award'],
+            spendingKeywords: ['budget', 'spending', 'funding', 'appropriation', 'grant', 'investment', 'billion', 'million'],
+
+            // Number of articles to display
+            maxArticles: 20,
+
+            // API provider
+            provider: 'rss'
+        };
+
+        async function loadNews() {
+            const feedElement = document.getElementById('news-feed');
+            feedElement.innerHTML = '<div class="loading">Loading news from multiple sources...</div>';
+
+            try {
+                const articles = await fetchFromRSS();
+                displayNews(articles);
+            } catch (error) {
+                console.error('Error loading news:', error);
+                feedElement.innerHTML = `
+                    <div class="error">
+                        <strong>Error loading news:</strong> ${error.message}
+                        <br><br>
+                        Unable to load RSS feeds. Please try again later.
+                    </div>
+                `;
+            }
+        }
+
+        async function fetchFromRSS() {
+            // Fetch all RSS feeds in parallel
+            const feedPromises = CONFIG.rssFeeds.map(feed =>
+                fetchSingleFeed(feed.url, feed.name)
+            );
+
+            const feedResults = await Promise.allSettled(feedPromises);
+
+            // Combine all articles from successful feeds
+            let allArticles = [];
+            feedResults.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value) {
+                    console.log(`Loaded ${result.value.length} articles from ${CONFIG.rssFeeds[index].name}`);
+                    allArticles = allArticles.concat(result.value);
+                } else {
+                    console.warn(`Failed to load feed: ${CONFIG.rssFeeds[index].name}`, result.reason);
+                }
+            });
+
+            console.log(`Total articles fetched: ${allArticles.length}`);
+
+            // Filter for DHS-related articles
+            const dhsArticles = allArticles.filter(article => {
+                const fullText = `${article.title} ${article.description || ''}`.toLowerCase();
+
+                // Must mention at least one agency
+                return CONFIG.agencies.some(agency =>
+                    agency.keywords.some(kw => fullText.includes(kw.toLowerCase()))
+                );
+            });
+
+            console.log(`DHS-related articles found: ${dhsArticles.length}`);
+
+            // Process and tag articles
+            const taggedArticles = dhsArticles.map(article => {
+                const fullText = `${article.title} ${article.description || ''}`.toLowerCase();
+
+                // Detect agencies mentioned
+                const matchedAgencies = CONFIG.agencies.filter(agency =>
+                    agency.keywords.some(kw => fullText.includes(kw.toLowerCase()))
+                ).map(a => a.name);
+
+                // Detect contract/spending keywords
+                const hasContract = CONFIG.contractKeywords.some(kw =>
+                    fullText.includes(kw.toLowerCase())
+                );
+                const hasSpending = CONFIG.spendingKeywords.some(kw =>
+                    fullText.includes(kw.toLowerCase())
+                );
+
+                // Calculate priority score (higher = more relevant)
+                let priority = 0;
+                if (hasContract) priority += 10;
+                if (hasSpending) priority += 10;
+                priority += matchedAgencies.length * 2;
+
+                return {
+                    ...article,
+                    agencies: matchedAgencies,
+                    hasContract,
+                    hasSpending,
+                    priority
+                };
+            });
+
+            // Sort by priority (contract news first), then by date
+            taggedArticles.sort((a, b) => {
+                if (b.priority !== a.priority) {
+                    return b.priority - a.priority;
+                }
+                return new Date(b.publishedAt) - new Date(a.publishedAt);
+            });
+
+            // If no DHS articles found, return a sample of all articles for debugging
+            if (taggedArticles.length === 0 && allArticles.length > 0) {
+                console.warn('No DHS-related articles found. Showing recent articles for debugging.');
+                return allArticles.slice(0, 5).map(article => ({
+                    ...article,
+                    agencies: [],
+                    hasContract: false,
+                    hasSpending: false,
+                    priority: 0
+                }));
+            }
+
+            return taggedArticles.slice(0, CONFIG.maxArticles);
+        }
+
+        async function fetchSingleFeed(feedUrl, sourceName) {
+            try {
+                const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=50&api_key=YOUR_API_KEY_IF_NEEDED`;
+
+                const response = await fetch(rss2jsonUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.status !== 'ok') {
+                    throw new Error(data.message || 'RSS parsing failed');
+                }
+
+                if (!data.items || data.items.length === 0) {
+                    console.warn(`${sourceName}: No items in feed`);
+                    return [];
+                }
+
+                return data.items.map(item => ({
+                    title: item.title || 'Untitled',
+                    description: item.description || item.content || '',
+                    url: item.link || item.guid || '#',
+                    source: sourceName,
+                    publishedAt: item.pubDate || new Date().toISOString(),
+                    image: item.thumbnail
+                }));
+            } catch (error) {
+                console.error(`Error fetching ${sourceName}:`, error.message);
+                return [];
+            }
+        }
+
+        function displayNews(articles) {
+            const feedElement = document.getElementById('news-feed');
+
+            if (!articles || articles.length === 0) {
+                feedElement.innerHTML = '<div class="loading">No articles found</div>';
+                return;
+            }
+
+            feedElement.innerHTML = articles.map(article => {
+                const date = new Date(article.publishedAt);
+                const timeAgo = getTimeAgo(date);
+
+                // Build badges
+                let badges = '';
+                if (article.hasContract) {
+                    badges += '<span class="contract-badge">CONTRACT</span>';
+                }
+
+                // Build agency tags
+                const agencyTags = article.agencies
+                    ? article.agencies.map(agency => `<span class="agency-tag">${agency}</span>`).join('')
+                    : '';
+
+                return `
+                    <div class="news-item" onclick="window.open('${article.url}', '_blank')">
+                        <div style="margin-bottom: 8px;">
+                            ${badges}${agencyTags}
+                        </div>
+                        <div class="news-title">${escapeHtml(article.title)}</div>
+                        ${article.description ? `<div class="news-description">${escapeHtml(article.description)}</div>` : ''}
+                        <div class="news-meta">
+                            <span class="news-source">${escapeHtml(article.source)}</span>
+                            <span>${timeAgo}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+
+            const intervals = {
+                year: 31536000,
+                month: 2592000,
+                week: 604800,
+                day: 86400,
+                hour: 3600,
+                minute: 60
+            };
+
+            for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+                const interval = Math.floor(seconds / secondsInUnit);
+                if (interval >= 1) {
+                    return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
+                }
+            }
+
+            return 'Just now';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load news on page load
+        loadNews();
+
+        // Auto-refresh every 15 minutes
+        setInterval(loadNews, 15 * 60 * 1000);
+    </script>
+</body>
+</html>
