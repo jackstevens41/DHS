@@ -295,36 +295,101 @@
 
         async function fetchSingleFeed(feedUrl, sourceName) {
             try {
-                const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=30`;
+                // Use AllOrigins as CORS proxy to fetch RSS feed directly
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`;
 
-                const response = await fetch(rss2jsonUrl);
+                const response = await fetch(proxyUrl);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
 
-                const data = await response.json();
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
-                if (data.status !== 'ok') {
-                    throw new Error(data.message || 'RSS parsing failed');
+                // Check for parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    throw new Error('XML parsing failed');
                 }
 
-                if (!data.items || data.items.length === 0) {
-                    console.warn(`${sourceName}: No items in feed`);
-                    return [];
+                // Parse RSS items
+                const items = xmlDoc.querySelectorAll('item');
+                if (items.length === 0) {
+                    // Try Atom format
+                    const entries = xmlDoc.querySelectorAll('entry');
+                    if (entries.length === 0) {
+                        console.warn(`${sourceName}: No items in feed`);
+                        return [];
+                    }
+                    return parseAtomFeed(entries, sourceName);
                 }
 
-                return data.items.map(item => ({
-                    title: item.title || 'Untitled',
-                    description: item.description || item.content || '',
-                    url: item.link || item.guid || '#',
-                    source: sourceName,
-                    publishedAt: item.pubDate || new Date().toISOString(),
-                    image: item.thumbnail
-                }));
+                return parseRSSFeed(items, sourceName);
             } catch (error) {
                 console.error(`Error fetching ${sourceName}:`, error.message);
                 return [];
             }
+        }
+
+        function parseRSSFeed(items, sourceName) {
+            const articles = [];
+            const maxItems = Math.min(items.length, 30);
+
+            for (let i = 0; i < maxItems; i++) {
+                const item = items[i];
+                const title = item.querySelector('title')?.textContent || 'Untitled';
+                const link = item.querySelector('link')?.textContent || '#';
+                const description = item.querySelector('description')?.textContent ||
+                                   item.querySelector('content\\:encoded')?.textContent || '';
+                const pubDate = item.querySelector('pubDate')?.textContent ||
+                               item.querySelector('dc\\:date')?.textContent ||
+                               new Date().toISOString();
+
+                articles.push({
+                    title: title.trim(),
+                    description: stripHtml(description).trim(),
+                    url: link.trim(),
+                    source: sourceName,
+                    publishedAt: pubDate,
+                    image: null
+                });
+            }
+
+            return articles;
+        }
+
+        function parseAtomFeed(entries, sourceName) {
+            const articles = [];
+            const maxItems = Math.min(entries.length, 30);
+
+            for (let i = 0; i < maxItems; i++) {
+                const entry = entries[i];
+                const title = entry.querySelector('title')?.textContent || 'Untitled';
+                const link = entry.querySelector('link')?.getAttribute('href') || '#';
+                const summary = entry.querySelector('summary')?.textContent ||
+                               entry.querySelector('content')?.textContent || '';
+                const published = entry.querySelector('published')?.textContent ||
+                                 entry.querySelector('updated')?.textContent ||
+                                 new Date().toISOString();
+
+                articles.push({
+                    title: title.trim(),
+                    description: stripHtml(summary).trim(),
+                    url: link.trim(),
+                    source: sourceName,
+                    publishedAt: published,
+                    image: null
+                });
+            }
+
+            return articles;
+        }
+
+        function stripHtml(html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
         }
 
         function displayNews(articles) {
