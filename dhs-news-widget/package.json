@@ -1,0 +1,17 @@
+{
+  "name": "dhs-news-widget",
+  "version": "1.0.0",
+  "description": "DHS and subagencies news aggregator widget",
+  "main": "index.html",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "keywords": [
+    "dhs",
+    "news",
+    "rss",
+    "widget"
+  ],
+  "author": "",
+  "license": "MIT"
+}

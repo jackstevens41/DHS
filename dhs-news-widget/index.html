@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHS & Agencies News Feed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f9f9f9;
+            padding: 20px;
+            color: #1f1f1f;
+        }
+
+        .news-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        #news-feed {
+            max-height: 600px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 8px;
+        }
+
+        #news-feed::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #news-feed::-webkit-scrollbar-track {
+            background: #e0e0e0;
+            border-radius: 4px;
+        }
+
+        #news-feed::-webkit-scrollbar-thumb {
+            background: #ba44fd;
+            border-radius: 4px;
+        }
+
+        #news-feed::-webkit-scrollbar-thumb:hover {
+            background: #a030e8;
+        }
+
+        .widget-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #ba44fd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .widget-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f1f1f;
+        }
+
+        .agency-tag {
+            display: inline-block;
+            background: #e8d9ff;
+            color: #1f1f1f;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 6px;
+            text-transform: uppercase;
+        }
+
+        .contract-badge {
+            display: inline-block;
+            background: #d13438;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #1f1f1f;
+        }
+
+        .error {
+            background: #fde7e9;
+            border-left: 4px solid #a80000;
+            padding: 15px;
+            margin: 20px 0;
+            color: #1f1f1f;
+        }
+
+        .news-item {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: box-shadow 0.2s, transform 0.2s;
+            cursor: pointer;
+        }
+
+        .news-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .news-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ba44fd;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .news-description {
+            font-size: 14px;
+            color: #1f1f1f;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .news-meta {
+            font-size: 12px;
+            color: #6b6b6b;
+            display: flex;
+            gap: 12px;
+        }
+
+        .news-source {
+            font-weight: 600;
+            color: #1f1f1f;
+        }
+
+        .refresh-btn {
+            background: #ba44fd;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .refresh-btn:hover {
+            background: #a030e8;
+        }
+
+        .refresh-btn:disabled {
+            background: #d4d4d4;
+            cursor: not-allowed;
+        }
+
+        .meta-info {
+            font-size: 12px;
+            color: #6b6b6b;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="news-container">
+        <div class="widget-header">
+            <h1 class="widget-title">DHS & Agencies News</h1>
+            <button class="refresh-btn" onclick="loadNews()" id="refresh-btn">Refresh</button>
+        </div>
+        <div id="news-feed">
+            <div class="loading">Loading news...</div>
+        </div>
+        <div id="meta-info" class="meta-info"></div>
+    </div>
+
+    <script>
+        async function loadNews() {
+            const feedElement = document.getElementById('news-feed');
+            const metaElement = document.getElementById('meta-info');
+            const refreshBtn = document.getElementById('refresh-btn');
+
+            feedElement.innerHTML = '<div class="loading">Loading DHS news from multiple sources...</div>';
+            metaElement.innerHTML = '';
+            refreshBtn.disabled = true;
+
+            try {
+                console.log('Fetching news from serverless function...');
+
+                const response = await fetch('/.netlify/functions/fetch-news');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                console.log('Received data:', data);
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                displayNews(data.articles);
+
+                // Display meta information
+                if (data.meta) {
+                    const lastUpdate = new Date(data.meta.timestamp).toLocaleString();
+                    metaElement.innerHTML = `
+                        Last updated: ${lastUpdate} |
+                        ${data.meta.dhsArticles} DHS articles from ${data.meta.totalArticles} total |
+                        ${data.meta.successfulFeeds} sources loaded
+                    `;
+                }
+
+            } catch (error) {
+                console.error('Error loading news:', error);
+                feedElement.innerHTML = `
+                    <div class="error">
+                        <strong>Error loading news:</strong> ${error.message}
+                        <br><br>
+                        Please try again later or check the browser console for details.
+                    </div>
+                `;
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+
+        function displayNews(articles) {
+            const feedElement = document.getElementById('news-feed');
+
+            if (!articles || articles.length === 0) {
+                feedElement.innerHTML = '<div class="loading">No DHS-related articles found in recent news</div>';
+                return;
+            }
+
+            feedElement.innerHTML = articles.map(article => {
+                const date = new Date(article.publishedAt);
+                const timeAgo = getTimeAgo(date);
+
+                // Build badges
+                let badges = '';
+                if (article.hasContract) {
+                    badges += '<span class="contract-badge">CONTRACT</span>';
+                }
+
+                // Build agency tags
+                const agencyTags = article.agencies
+                    ? article.agencies.map(agency => `<span class="agency-tag">${agency}</span>`).join('')
+                    : '';
+
+                return `
+                    <div class="news-item" onclick="window.open('${escapeHtml(article.url)}', '_blank')">
+                        <div style="margin-bottom: 8px;">
+                            ${badges}${agencyTags}
+                        </div>
+                        <div class="news-title">${escapeHtml(article.title)}</div>
+                        ${article.description ? `<div class="news-description">${escapeHtml(article.description)}</div>` : ''}
+                        <div class="news-meta">
+                            <span class="news-source">${escapeHtml(article.source)}</span>
+                            <span>${timeAgo}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+
+            const intervals = {
+                year: 31536000,
+                month: 2592000,
+                week: 604800,
+                day: 86400,
+                hour: 3600,
+                minute: 60
+            };
+
+            for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+                const interval = Math.floor(seconds / secondsInUnit);
+                if (interval >= 1) {
+                    return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
+                }
+            }
+
+            return 'Just now';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load news on page load
+        loadNews();
+
+        // Auto-refresh every 15 minutes
+        setInterval(loadNews, 15 * 60 * 1000);
+    </script>
+</body>
+</html>
